@@ -1,0 +1,15 @@
+{
+  "name": "png-alpha-creator",
+  "version": "1.0.0",
+  "description": "Browser-based editor for PNG alpha masks: edge fades, vignettes, feathered shapes and gradients.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node scripts/serve.js",
+    "test": "node scripts/verify.js"
+  }
+}
