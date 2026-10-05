@@ -15,7 +15,7 @@
   <header class="topbar">
     <div class="brand"><span class="logo"></span>PNG Alpha Creator</div>
 
-    <div class="group" title="Presets: built-in ones keep the current resolution; saved ones restore theirs">
+    <div class="group presets" title="Presets: built-in ones keep the current resolution; saved ones restore theirs">
       <select id="presetSelect" aria-label="Load preset"></select>
       <button id="presetSave" title="Save current mask as a preset in this browser">Save</button>
       <button id="presetDelete" class="icon" title="Delete selected saved preset">✕</button>
@@ -28,7 +28,7 @@
       <input type="file" id="presetFile" accept=".json,application/json" hidden>
     </div>
 
-    <div class="group">
+    <div class="group history">
       <button id="undoBtn" class="icon" title="Undo (Ctrl/⌘+Z)">↶</button>
       <button id="redoBtn" class="icon" title="Redo (Ctrl/⌘+Shift+Z)">↷</button>
     </div>

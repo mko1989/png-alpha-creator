@@ -228,7 +228,8 @@ input[type="range"]:hover::-webkit-slider-thumb { background: #fff; transform: s
 }
 #display { width: 100%; height: 100%; display: block; }
 #display.pixelated { image-rendering: pixelated; }
-#overlay { position: absolute; inset: 0; pointer-events: none; }
+/* A canvas is a replaced element: inset alone won't stretch it, so size it explicitly. */
+#overlay { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; }
 #dropHint {
   position: absolute; inset: 12px;
   border: 2px dashed var(--accent);
@@ -275,9 +276,59 @@ input[type="range"]:hover::-webkit-slider-thumb { background: #fff; transform: s
   .panel.right { width: 270px; }
   .panel.left { width: 230px; }
 }
+/* Phones / narrow windows: one scrolling column, canvas pinned at the top, panels below. */
 @media (max-width: 860px) {
-  body { overflow: auto; }
-  main { flex-direction: column; }
+  html, body { height: auto; }
+  body { overflow: visible; min-height: 100%; }
+  .topbar { gap: 6px; padding: 6px 8px; }
+  .topbar .spacer { display: none; }
+  .history { order: 0; margin-left: auto; }
+  .presets { order: 1; flex: 1 1 100%; min-width: 0; }
+  #presetSelect { flex: 1 1 0; width: auto; }
+  #viewModes { order: 2; flex: 1; min-width: 0; }
+  #viewModes button { flex: 1; padding: 4px 2px; }
+  #loadImage { order: 2; }
+  .export { order: 3; flex: 1 1 100%; min-width: 0; }
+  #fileName { flex: 2 1 0; width: auto; }
+  #format { flex: 3 1 0; width: auto; }
+
+  main { flex: none; flex-direction: column; }
+  .center {
+    order: -1;
+    position: sticky; top: 0; z-index: 5;
+    flex: none;
+    height: 46vh; height: 46svh; min-height: 220px;
+    border-bottom: 1px solid var(--border);
+  }
+  .panel { overflow: visible; }
   .panel.left, .panel.right { width: 100%; border: 0; }
-  .center { min-height: 60vh; }
+  .panel.right { border-bottom: 1px solid var(--border); }
+  .panel section.grow { min-height: 0; }
+  .layers { overflow: visible; }
+  #readout { display: none; }
+  #renderInfo { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+}
+
+/* Touch: finger-sized targets; 16px text in fields stops iOS zooming in on focus. */
+@media (pointer: coarse) {
+  button, select, input[type="number"], input[type="text"], input:not([type]) { height: 36px; }
+  button.icon { width: 36px; }
+  select, input[type="number"], input[type="text"], input:not([type]) { font-size: 16px; }
+  input[type="checkbox"] { width: 20px; height: 20px; }
+  .ctrl, .ctrl.wide, .ctrl.check { min-height: 40px; grid-template-columns: 84px 1fr 88px; }
+  .ctrl.wide, .ctrl.check { grid-template-columns: 84px 1fr; }
+  #docControls .ctrl { grid-template-columns: 70px 1fr 88px; }
+  .ctrl .num input, .ctrl select { height: 34px; }
+  .checks { gap: 20px; padding: 8px 0 6px; }
+  .checks label { gap: 8px; }
+  input[type="range"] { height: 34px; }
+  input[type="range"]::-webkit-slider-thumb { width: 22px; height: 22px; margin-top: -9px; }
+  input[type="range"]::-moz-range-thumb { width: 22px; height: 22px; }
+  .row.size input { width: 84px; }
+  .layer { padding: 7px 6px; }
+  .layer canvas { width: 50px; height: 30px; }
+  .statusbar { height: 46px; }
+  .statusbar button, .statusbar select { height: 34px; }
+  .statusbar button.icon { width: 34px; }
+  #zoomSel { width: 84px; }
 }

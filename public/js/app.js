@@ -734,7 +734,7 @@ function applyView() {
 function fitView() {
   const r = viewport.getBoundingClientRect();
   if (!r.width || !r.height) return;
-  const pad = 28;
+  const pad = r.width < 500 ? 12 : 28;
   const z = Math.min((r.width - pad * 2) / doc.width, (r.height - pad * 2) / doc.height);
   view.zoom = z > 0 ? z : 1;
   view.x = (r.width - doc.width * view.zoom) / 2;
@@ -767,6 +767,8 @@ const toDoc = (sx, sy) => [(sx - Math.round(view.x)) / view.zoom, (sy - Math.rou
 
 let handles = [];
 const ACCENT = '#f0a63a';
+// Bigger handles and hit areas for fingers; follows the last pointer type used on the canvas.
+let touchUI = matchMedia('(pointer: coarse)').matches;
 
 function strokeTwice(ctx, dashed = false) {
   ctx.setLineDash(dashed ? [5, 4] : []);
@@ -839,7 +841,7 @@ function drawOverlay() {
     if (l.mode === 'band') { line(-hw, false); line(hw, false); line(-hw - f, true); line(hw + f, true); }
     else { line(0, false); line(-f / 2, true); line(f / 2, true); }
     const [sx, sy] = toScreen(cx, cy);
-    const len = 70;
+    const len = touchUI ? 90 : 70;
     ctx.beginPath();
     ctx.moveTo(sx, sy);
     ctx.lineTo(sx + ux * len, sy + uy * len);
@@ -875,16 +877,17 @@ function drawOverlay() {
     addHandle('move', sx, sy);
     const corner = l.type === 'rect' ? 1 : Math.SQRT1_2; // ellipses: handle sits on the curve at 45°
     addHandle('size', ...rotPt(g.hw * corner, g.hh * corner), 'square');
-    const [rx, ry] = rotPt(0, -g.hh - 26 / z);
+    const [rx, ry] = rotPt(0, -g.hh - (touchUI ? 40 : 26) / z);
     const [tx, ty] = rotPt(0, -g.hh);
     ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(rx, ry); strokeTwice(ctx, true);
     addHandle('rot', rx, ry, 'ring');
   }
 
+  const hs = touchUI ? 1.6 : 1;
   for (const h of handles) {
     ctx.beginPath();
-    if (h.shape === 'square') ctx.rect(h.x - 4.5, h.y - 4.5, 9, 9);
-    else ctx.arc(h.x, h.y, h.shape === 'ring' ? 5 : 5.5, 0, Math.PI * 2);
+    if (h.shape === 'square') ctx.rect(h.x - 4.5 * hs, h.y - 4.5 * hs, 9 * hs, 9 * hs);
+    else ctx.arc(h.x, h.y, (h.shape === 'ring' ? 5 : 5.5) * hs, 0, Math.PI * 2);
     ctx.fillStyle = h.shape === 'ring' ? ACCENT : '#fff';
     ctx.fill();
     ctx.lineWidth = 1.5;
@@ -909,6 +912,7 @@ function ellipsePath(ctx, rx, ry) {
 // Pointer interaction
 
 let drag = null, spaceDown = false;
+const touches = new Map(); // active touch pointers on the canvas: id -> [x, y]
 
 function localPoint(e) {
   const r = viewport.getBoundingClientRect();
@@ -918,7 +922,7 @@ function localPoint(e) {
 function hitHandle(px, py) {
   for (let i = handles.length - 1; i >= 0; i--) {
     const h = handles[i];
-    if (Math.hypot(h.x - px, h.y - py) <= 9) return h;
+    if (Math.hypot(h.x - px, h.y - py) <= (touchUI ? 22 : 9)) return h;
   }
   return null;
 }
@@ -931,7 +935,7 @@ function insideLayer(l, px, py) {
     const [X, Y] = toDoc(px, py);
     const a = (l.angle * Math.PI) / 180;
     const d = Math.abs((X - l.cx * doc.width) * Math.cos(a) + (Y - l.cy * doc.height) * Math.sin(a));
-    return d * view.zoom < 10;
+    return d * view.zoom < (touchUI ? 20 : 10);
   }
   const g = geometry(l);
   const [X, Y] = toDoc(px, py);
@@ -964,6 +968,13 @@ viewport.addEventListener('contextmenu', (e) => e.preventDefault());
 viewport.addEventListener('pointerdown', (e) => {
   viewport.focus({ preventScroll: true });
   const [px, py] = localPoint(e);
+  const touch = e.pointerType === 'touch';
+  if (touchUI !== touch) { touchUI = touch; drawOverlay(); }
+  if (touch) {
+    touches.set(e.pointerId, [px, py]);
+    if (touches.size === 2) return startPinch(e);
+    if (touches.size > 2) { viewport.setPointerCapture(e.pointerId); return; } // so its pointerup still reaches us
+  }
   let kind = 'pan';
   if (e.button === 0 && !spaceDown) {
     const t = dragTarget(px, py);
@@ -980,8 +991,11 @@ viewport.addEventListener('pointerdown', (e) => {
 
 viewport.addEventListener('pointermove', (e) => {
   const [px, py] = localPoint(e);
+  if (touches.has(e.pointerId)) touches.set(e.pointerId, [px, py]);
+  if (drag?.kind === 'pinch') return movePinch();
   updateReadout(px, py);
   if (!drag) {
+    if (e.pointerType === 'touch') return;
     const t = spaceDown ? { kind: 'pan' } : dragTarget(px, py);
     viewport.classList.toggle('handle', t.kind !== 'move' && t.kind !== 'pan');
     viewport.classList.toggle('move', t.kind === 'move');
@@ -1010,8 +1024,41 @@ function endDrag() {
   viewport.classList.remove('panning');
   if (current && !current.full) { clearTimeout(fullTimer); fullTimer = setTimeout(requestFull, 0); }
 }
-viewport.addEventListener('pointerup', endDrag);
-viewport.addEventListener('pointercancel', endDrag);
+function pointerEnd(e) {
+  touches.delete(e.pointerId);
+  // Lifting one finger of a pinch ends the gesture; the remaining finger does nothing until lifted.
+  if (drag?.kind === 'pinch' && !drag.ids.includes(e.pointerId)) return;
+  endDrag();
+}
+viewport.addEventListener('pointerup', pointerEnd);
+viewport.addEventListener('pointercancel', pointerEnd);
+
+// Two-finger pinch zooms and pans. A one-finger shape drag that was already under way is undone.
+function startPinch(e) {
+  if (drag?.changed && drag.start) {
+    const l = selected();
+    if (l?.id === drag.start.id) { Object.assign(l, drag.start); invalidate(); syncProps(); }
+  }
+  const [[ax, ay], [bx, by]] = touches.values();
+  const mx = (ax + bx) / 2, my = (ay + by) / 2;
+  drag = { kind: 'pinch', ids: [...touches.keys()], d0: Math.hypot(bx - ax, by - ay) || 1, z0: view.zoom, doc0: toDoc(mx, my) };
+  viewport.setPointerCapture(e.pointerId);
+  viewport.classList.remove('panning');
+  interacting = true;
+  e.preventDefault();
+}
+
+function movePinch() {
+  const pts = drag.ids.map((id) => touches.get(id));
+  if (pts.some((p) => !p)) return;
+  const [[ax, ay], [bx, by]] = pts;
+  const z = clamp(drag.z0 * (Math.hypot(bx - ax, by - ay) / drag.d0), 0.01, 64);
+  view.zoom = z;
+  view.x = (ax + bx) / 2 - drag.doc0[0] * z;
+  view.y = (ay + by) / 2 - drag.doc0[1] * z;
+  view.fit = false;
+  applyView();
+}
 viewport.addEventListener('pointerleave', () => { if (!drag) $('readout').textContent = ''; });
 
 function dragShape(l, d, px, py, shift) {
